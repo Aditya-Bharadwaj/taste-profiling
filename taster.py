@@ -92,11 +92,15 @@ def get_nutrients(food):
 def main():
 	foods_list = get_dishes()
 	for food in foods_list:
+		taste_scores = dict()
 		nutrients = get_nutrients(food)
 		salt_score = salt(nutrients)
+		taste_scores['salt'] = salt_score
 		sweet_score = sweet(nutrients)
+		taste_scores['sweet'] = sweet_score
 		richness_score = rich(nutrients)
-		print(food['dish_name'],salt_score,sweet_score,richness_score)
+		taste_scores['rich'] = richness_score
+		print(food['dish_name'],taste_scores)
 
 if __name__ == '__main__':
 	main()
