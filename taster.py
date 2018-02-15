@@ -3,6 +3,7 @@ import glob, sys
 import re
 import itertools
 import numpy
+import utilities
 
 SWEET_FACTOR_X = 0.9
 SWEET_FACTOR_Y = 0.1
@@ -62,16 +63,21 @@ def salt(dish_nutrition):
 def get_dishes():
 	with open('testset.json') as json_file:
 		foods_list = json.load(json_file)
+
 	return foods_list
 
 def total_weight(dish_nutrition):
 	totalweight = 0
 	for nutrient in dish_nutrition:
+		#print(dish_nutrition[nutrient])
 		if dish_nutrition[nutrient] is not None and 'g' in dish_nutrition[nutrient][0]:
 			#print(nutrient,dish_nutrition[nutrient])
-			number = re.findall('\d+\.\d+', dish_nutrition[nutrient][0])
-			#print(dish_nutrition[nutrient][0],number)	
-			numeric_value = float(number[0])
+			number = re.findall('(\d+\.\d+|\d+)', dish_nutrition[nutrient][0])
+			#print(nutrient,dish_nutrition[nutrient][0],number)
+			#print(numpy)
+			numeric_value = 0
+			if len(number) > 0:
+				numeric_value = float(number[0])
 			totalweight += numeric_value
 			#print(totalweight)
 	return totalweight
@@ -83,15 +89,14 @@ def get_nutrients(food):
 	for nutrient in nutrients:
 		if nutrients[nutrient] is not None:
 			number = re.findall('\d+\.\d+', nutrients[nutrient][0])
-			nutrients[nutrient] = float(number[0])
-		else:
-			nutrients[nutrient] = 0
+			if len(number) > 0 :
+				nutrients[nutrient] = float(number[0])
+			else:
+				nutrients[nutrient] = 0
 	nutrients['Weight'] = totalweight
 	return nutrients
 
-def main():
-	foods_list = get_dishes()
-	for food in foods_list:
+def taste(food):
 		taste_scores = dict()
 		nutrients = get_nutrients(food)
 		salt_score = salt(nutrients)
@@ -100,7 +105,48 @@ def main():
 		taste_scores['sweet'] = sweet_score
 		richness_score = rich(nutrients)
 		taste_scores['rich'] = richness_score
-		print(food['dish_name'],taste_scores)
+		tags = get_cuisine_tags(food)
+		cuisine_multipliers = get_cuisine_multipliers(tags)
+		taste_scores = update_scores(taste_scores,cuisine_multipliers)
+		#taste_scores = cuisine_taste(taste_scores)
+		return taste_scores
+def update_scores(taste_scores,cuisine_multipliers):
+	print(cuisine_multipliers)
+	for taste in taste_scores:
+		taste_scores[taste] = taste_scores[taste] * cuisine_multipliers[taste]
+	return taste_scores
+
+def get_cuisine_multipliers(tags):
+	with open('cuisine_multipliers.json') as json_file:
+		cuisine_multipliers = json.load(json_file)
+	default =  {
+		"salt":1.0,
+		"sweet":1.0,
+		"rich":1.0
+		}
+	if tags is not None:
+		if len(tags) == 0:
+			return default
+		if len(tags) == 1:
+			return cuisine_multipliers[tags[0]]
+		elif len(tags) == 2:
+			return cuisine_multipliers[tags[0]][tags[1]]
+	else:
+		return default
+
+def get_cuisine_tags(food):
+	with open('first_50_tags.json') as json_file:
+		tags = json.load(json_file)
+	closest_match = utilities.modmatchi(food['dish_name'],list(tags),threshold=0.5)
+	#print(food['dish_name'],closest_match)
+	if closest_match[0] is not None:
+		return tags[closest_match[0]]
+
+def main():
+	foods_list = get_dishes()
+	for food in foods_list:
+		#if food['dish_id'] == 98:
+		print(food['dish_name'],taste(food))
 
 if __name__ == '__main__':
 	main()
