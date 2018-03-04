@@ -4,6 +4,10 @@ import re
 import itertools
 import numpy
 import utilities
+import unicodedata
+import difflib
+from nltk import PorterStemmer
+from nltk.corpus import stopwords
 
 SWEET_FACTOR_X = 0.9
 SWEET_FACTOR_Y = 0.1
@@ -16,7 +20,8 @@ SOURNESS_FACTOR_X = 0.1
 SOURNESS_FACTOR_Y = 0.25
 SOURNESS_FACTOR_Z = 0.5
 
-
+p = PorterStemmer()
+stop_words = set(stopwords.words('english'))
 def sweet(nutrition_data, SWEET_FACTOR_X=0.85, SWEET_FACTOR_Y=0.1):
 	try:
 		total_weight = nutrition_data['Weight']
@@ -134,6 +139,101 @@ def get_cuisine_multipliers(tags):
 	else:
 		return default
 
+def parse_recipe(food):
+	ingredients_list = list(set(food['ingredients']))
+	for ing in ingredients_list:
+		#print(ing)
+		ingredient = identify_measurement(ing)
+		if len(ingredient['measurement']) == 0:
+			#print(ingredient)
+			pass
+		else:
+			pass
+			print(ingredient)
+	else:
+		pass
+
+measurements = [
+	"tablespoon","tbsp","tbs","teaspoon","tsp","ts","lb","pound","cup","clove","quart","g","gm","gram","ml","ounce","oz","cloves","cups","lbs"
+]
+
+adjectives = [
+	"large","medium","small","diced","chopped","minced","crushed","fresh","warm","sliced","thinly","finely","divided","dried","peeled","cubed"
+]
+
+def convert_to_float(numeric_value):
+	number = 0.0
+	numeric_value = re.split('\s+',numeric_value)
+	if len(numeric_value) == 2:
+		fraction = numeric_value[1].split('/')
+		number += float(numeric_value[0])
+	else:
+		fraction = numeric_value[0].split('/')
+	number += float(fraction[0])/float(fraction[1])
+	return number 
+
+vulgar_fraction_dict = {
+	"½":" 1/2",
+	"⅓":" 1/3",
+	"⅔":" 2/3",
+	"¼":" 1/4",
+	"¾":"3/4",
+	"⅛":" 1/8",
+	"⅒":" 1/10"
+}
+
+def convert_vulgar_fractions(ingredient):
+	for char in ingredient:
+		if char in vulgar_fraction_dict:
+			#print("here")
+			ingredient = ingredient.replace(char,vulgar_fraction_dict[char])
+	return ingredient
+
+def cleanup_str(ingredient):
+	ingredient = ingredient.replace('-',' ')
+	ingredient_tokens = ingredient.split(' ')
+	for word in ingredient_tokens:
+		index = ingredient_tokens.index(word)
+		if re.match('[a-zA-Z +]',word) and '.' in word:
+			ingredient_tokens[index] = word.replace('.','')
+	return ' '.join(ingredient_tokens) 
+
+def identify_measurement(ingredient):
+	pattern = r'(\d+\s+\d/\d|\d+/\d+)'
+	ingredient_dict = dict()
+	ingredient = convert_vulgar_fractions(ingredient)
+	ingredient = cleanup_str(ingredient) 
+	numeric_value = re.match(pattern,ingredient.strip())
+	if numeric_value is not None:
+		number = convert_to_float(numeric_value[0])
+		ingredient = re.sub(pattern,str(number),ingredient)
+	#else:
+		#print(ingredient)
+		#print(numeric_value[0])
+	ingredient_tokens = [i for i in ingredient.lower().split(' ') if i not in stop_words]
+	ingredient_tokens = [i for i in ingredient.lower().split(' ') if i not in adjectives]
+
+#	ingredient_tokens = [p.stem(word) for word in ingredient_tokens]
+	measurement = str()
+	prev_word = str()
+	for word in ingredient_tokens:
+		if len(difflib.get_close_matches(word,measurements,cutoff=0.9)) > 0:
+			measurement = prev_word + ' ' + word
+			#ingredient_dict['word'] = word
+			
+		prev_word = word
+	if len(measurement) == 0:
+		measurement = re.match('\d+(.\d+)?',ingredient)
+		if measurement is not None:
+			measurement = measurement[0]
+		else:
+			measurement = str()
+	ingredient = ' '.join(ingredient_tokens).strip()
+	ingredient = ingredient.replace(measurement,'')
+	ingredient_dict['measurement'] = measurement
+	ingredient_dict['ingredient']  = ingredient
+	return ingredient_dict
+
 def get_cuisine_tags(food):
 	with open('first_50_tags.json') as json_file:
 		tags = json.load(json_file)
@@ -146,7 +246,8 @@ def main():
 	foods_list = get_dishes()
 	for food in foods_list:
 		#if food['dish_id'] == 98:
-		print(food['dish_name'],taste(food))
+		parse_recipe(food)
+		#print(food['dish_name'],taste(food))
 
 if __name__ == '__main__':
 	main()
